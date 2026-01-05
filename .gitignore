@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.streamlit/
+
+.cursor/
+.ipynb_checkpoints/
+.pytest_cache/
+.env
+.env.*
+.idea/
+.vscode/
+*.log
+
+data/raw/
+data/processed/
+models/
+# Keep figures in git (small, makes the report readable on GitHub)
+# reports/figures/
+
+# Also ignore any raw Volve Excel file placed at repo root
+Volve production data.xlsx
+

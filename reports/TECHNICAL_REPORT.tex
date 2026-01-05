@@ -1,0 +1,188 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{microtype}
+
+\title{Volve Production Forecasting (DCA) with Operational Emissions Proxy and Scenario Analysis}
+\author{Abu Mohammad Taief}
+\date{January 2026}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\textbf{Target role:} Equinor North Development Program 2026 --- Engineer Reservoir Technology (Harstad)
+\end{center}
+
+% -----------------------------------------------------------------------------
+% Page 1: Memo-style summary
+% -----------------------------------------------------------------------------
+\section*{Memo (1 page)}
+\textbf{Problem.} Reservoir engineers need short/medium-term production forecasts that are transparent, validated, and usable for decisions such as rate constraints and emissions planning.\newline
+\textbf{What I built.} Using Equinor's public Volve production dataset, I created a reproducible workflow from raw daily wellbore data to (i) quality-controlled time series, (ii) a decline-curve baseline forecast (exponential vs. hyperbolic), (iii) time-based backtesting metrics, and (iv) an operational CO\textsubscript{2} proxy and simple rate-cap scenario comparison.\newline
+\textbf{Why it is defensible.} The workflow explicitly handles operational effects (downtime/shut-ins) using on-stream hours and validates forecasts via a train/test split on time, not random shuffling.
+
+\subsection*{Data provenance (what exactly was used)}
+\begin{itemize}
+    \item \textbf{Source file:} \texttt{Volve production data.xlsx} (Daily Production Data sheet)
+    \item \textbf{Key raw columns (rates + operations):} \texttt{DATEPRD}, \texttt{WELL\_BORE\_CODE}, \texttt{ON\_STREAM\_HRS}, \texttt{BORE\_OIL\_VOL}, \texttt{BORE\_GAS\_VOL}, \texttt{BORE\_WAT\_VOL}, \texttt{AVG\_WHP\_P}, \texttt{AVG\_DOWNHOLE\_PRESSURE}, \texttt{AVG\_CHOKE\_SIZE\_P}, \texttt{DP\_CHOKE\_SIZE}, \texttt{BORE\_WI\_VOL}, \texttt{FLOW\_KIND}, \texttt{WELL\_TYPE}
+    \item \textbf{Processed table:} \texttt{data/processed/volve\_daily.csv}
+    \item \textbf{Scope:} 7 wellbores, 2007--2016 (daily)
+\end{itemize}
+
+\subsection*{Key idea: separating ``production'' from ``downtime''}
+In real operations, zeros are often \textbf{shut-ins} (maintenance/tests), not the reservoir suddenly producing zero. Therefore, the DCA fit is performed on \textbf{flowing days only} (on-stream hours $>0$ and positive oil rate). For interpretability, I compute an uptime-corrected effective flowing rate:
+\[
+q_{\mathrm{oil,eff}} = \frac{q_{\mathrm{oil}}}{\max(\mathrm{on\_stream\_hrs},\,\epsilon)/24}
+\]
+This approximates the rate while flowing, rather than the day-average that mixes in downtime.
+
+\subsection*{What the interviewer can see quickly}
+\begin{itemize}
+    \item QC: downtime patterns and oil-rate history (Figure~\ref{fig:qc})
+    \item Forecasting baseline: DCA fit and time-based backtest (Figures~\ref{fig:dca_fit}, \ref{fig:dca_bt})
+    \item Emissions proxy + scenario: cumulative oil and operational CO\textsubscript{2} under a data-derived rate cap (Figures~\ref{fig:emissions}, \ref{fig:scenario})
+\end{itemize}
+
+\clearpage
+
+% -----------------------------------------------------------------------------
+% Pages 2-4: Technical detail
+% -----------------------------------------------------------------------------
+\section{Technical Details}
+
+\subsection{Dataset and processing}
+The daily table was extracted from the Excel workbook and standardized to per-wellbore, per-day time series. I kept the processing transparent:
+(1) parse dates, (2) standardize wellbore names, (3) clamp on-stream hours to \([0,24]\), (4) remove negative rates (treated as invalid), (5) compute effective flowing rates, and (6) aggregate duplicates on \((\text{wellbore}, \text{date})\) if present.
+
+\subsection{Forecasting method: Decline Curve Analysis (DCA)}
+DCA is a widely used reservoir-engineering baseline for production decline forecasting. I fit two models:
+\begin{align*}
+\text{Exponential:}\quad & q(t)=q_i\,e^{-Dt}\\
+\text{Hyperbolic:}\quad & q(t)=q_i\,(1+bD_it)^{-1/b}
+\end{align*}
+Parameters are estimated with bounded non-linear least squares. Model choice is based on \textbf{AIC}, which penalizes unnecessary complexity (helps avoid overfitting).
+
+\subsection{Validation: time-based train/test split}
+To make the evaluation realistic, I used a \textbf{time split}:
+\begin{itemize}
+    \item \textbf{Train:} all flowing-day observations up to 90 days before the end
+    \item \textbf{Test:} the last 90 flowing-day observations
+\end{itemize}
+This mimics real forecasting: the future is not randomly sampled.
+
+\subsection{Metrics (kept minimal and defensible)}
+To keep evaluation interview-friendly, I report two error metrics in engineering units (Sm$^3$/d):
+\begin{itemize}
+    \item \textbf{MAE}: mean $|y-\hat{y}|$
+    \item \textbf{RMSE}: like MAE but penalizes large misses more strongly
+\end{itemize}
+Evaluation uses a \textbf{time-based split} (last 90 flowing days held out).
+
+\subsection{Operational CO\textsubscript{2} proxy (Scope 1+2)}
+The job description mentions ``emission predictions''. Without metered facility data, I used an \textbf{industry-intensity proxy}.
+I assumed \SI{70}{\kilo\gram\ CO\textsubscript{2}\ /\ \cubic\meter} oil for Volve (small mature FPSO field), within reported NCS ranges.
+\textit{Important:} this represents operational emissions (power, flaring, fugitives), not combustion of produced hydrocarbons.
+
+\subsection{Scenario analysis (decision support)}
+A rate-cap scenario is a simple decision-support proxy. To avoid a ``non-binding'' cap, the cap is derived from the data:
+\begin{itemize}
+    \item Compute $P95$ of historical daily rates for the showcase well
+    \item Apply cap $=0.8\times P95$ to daily rates
+    \item Compare cumulative oil and operational CO\textsubscript{2}
+\end{itemize}
+
+\section{Results}
+\subsection{Showcase well selection}
+To present a clear, defendable example, the dashboard defaults to the wellbore with the longest continuous flowing segment: \textbf{NO 15/9-F-14 H}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figures/NO_15_9-F-14_H_q_oil_eff.png}
+    \caption{QC view (showcase well): effective flowing oil rate time series. Downward gaps correspond to downtime/shut-ins (handled explicitly).}
+    \label{fig:qc}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figures/dca_fit_NO_15_9-F-14_H_q_oil_eff.png}
+    \caption{DCA fit for NO 15/9-F-14 H on flowing days (target: $q_{\mathrm{oil,eff}}$).}
+    \label{fig:dca_fit}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figures/dca_backtest_NO_15_9-F-14_H_q_oil_eff.png}
+    \caption{Time-based backtest for NO 15/9-F-14 H (train on early period, test on last 90 flowing days).}
+    \label{fig:dca_bt}
+\end{figure}
+
+\subsection{Backtest performance across wells}
+\begin{center}
+\begin{tabular}{l l r r r}
+\toprule
+Wellbore & Model & RMSE (Sm\textsuperscript{3}/d) & MAE (Sm\textsuperscript{3}/d) & AIC \\
+\midrule
+NO~15/9-F-15 D & Hyperbolic & 34.8 & 28.7 & 5524 \\
+NO~15/9-F-1 C & Hyperbolic & 84.5 & 69.3 & 3800 \\
+NO~15/9-F-12 H & Exponential & 134.3 & 132.1 & 37776 \\
+NO~15/9-F-14 H & Exponential & 208.8 & 208.6 & 32499 \\
+NO~15/9-F-11 H & Exponential & 510.0 & 508.7 & 12058 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent\textbf{Interpretation.} Some wells are well-described by a simple DCA baseline (e.g., F-15 D), while others show behavior likely requiring segmentation or additional features (pressure/choke/injection) to improve predictive performance.
+
+\subsection{Operational signals (pressure, choke, injection): why they matter for DCA}
+Volve includes operational signals that help explain deviations from a smooth decline curve:
+\begin{itemize}
+    \item \textbf{Choke} (\texttt{AVG\_CHOKE\_SIZE\_P}, \texttt{DP\_CHOKE\_SIZE}): choke adjustments directly change rate and can cause step changes that DCA will not predict.
+    \item \textbf{Pressure} (\texttt{AVG\_WHP\_P}, \texttt{AVG\_DOWNHOLE\_PRESSURE}): pressure depletion/support changes drawdown and therefore decline behavior.
+    \item \textbf{Injection + role} (\texttt{BORE\_WI\_VOL}, \texttt{FLOW\_KIND}, \texttt{WELL\_TYPE}): producers vs injectors differ; injection activity can support pressure and stabilize rates.
+\end{itemize}
+In the dashboard, these are plotted as time series and as scatter versus oil rate to make operational regime changes visible and interview-defensible.
+
+\subsection{Emissions proxy and rate-cap scenario (showcase well)}
+For NO 15/9-F-14 H (flowing days only, 2008-07-13 to 2016-07-13; 2723 samples):
+\begin{itemize}
+    \item Base cumulative oil: \num{4109499} Sm\textsuperscript{3}
+    \item Base operational CO\textsubscript{2}: \num{287665} tonnes (at \SI{70}{\kilo\gram\ CO\textsubscript{2}\ /\ \cubic\meter})
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figures/emissions_NO_15_9-F-14_H_q_oil_eff.png}
+    \caption{Cumulative oil and operational CO\textsubscript{2} proxy (showcase well).}
+    \label{fig:emissions}
+\end{figure}
+
+Scenario: $P95=\SI{4225}{\cubic\meter\per\day}$, cap $=0.8\times P95=\SI{3380}{\cubic\meter\per\day}$.\newline
+Capped cumulative oil: \num{3863906} Sm\textsuperscript{3} (94.0\% of base; $\Delta=\num{245592}$ Sm\textsuperscript{3}).\newline
+Capped operational CO\textsubscript{2}: \num{270473} tonnes.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figures/scenario_rate_cap_p95_NO_15_9-F-14_H_q_oil_eff.png}
+    \caption{Scenario analysis (data-derived cap): base vs. capped cumulative oil and operational CO\textsubscript{2}.}
+    \label{fig:scenario}
+\end{figure}
+
+\section{Limitations and next steps}
+\textbf{Limitations.} DCA is empirical and single-well; it does not represent full reservoir physics. The emissions estimate is a proxy based on intensity, not metered facility emissions.\newline
+\textbf{Next steps.} If given access to richer subsurface data, I would: (i) incorporate choke/pressure/injection signals, (ii) segment by regime changes, (iii) compare against a data-driven baseline, and (iv) align emissions estimation with Equinor reporting methodology.
+
+\section*{References}
+\begin{thebibliography}{9}
+\bibitem{killick2012}
+R. Killick, P. Fearnhead, and I. A. Eckley (2012). \emph{Optimal Detection of Changepoints With a Linear Computational Cost}. Journal of the American Statistical Association, 107(500), 1590--1598. DOI: \url{https://doi.org/10.1080/01621459.2012.737745}
+\end{thebibliography}
+
+
+\end{document}
