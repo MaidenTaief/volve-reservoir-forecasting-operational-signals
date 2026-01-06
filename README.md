@@ -1,60 +1,72 @@
-# Volve Reservoir Forecasting (Equinor interview project)
+# Volve reservoir forecasting + operational signals (Volve, Equinor Open Data)
 
-This repo is a **small but defensible** technical showcase for the Equinor Reservoir Engineer posting (Harstad). It uses **real Equinor Volve production data** and focuses on what reservoir teams actually do: QC → forecasting baseline → validation → decision-support style scenario → emissions proxy (clearly documented assumptions).
+This repository is a compact, explainable reservoir-engineering showcase built on **real Equinor Volve daily wellbore data**. It covers **QC of downtime**, a transparent **DCA baseline forecast** (exponential vs hyperbolic), **time-based backtesting** (RMSE/MAE), and decision-support visuals: **operational signals (pressure/choke/injection)** plus an **operational CO₂ proxy** and a **rate-cap scenario**.
 
-## What’s inside
+## Key files (start here)
 
-- **Data processing**: Excel → clean daily wellbore time series
-- **QC**: downtime/shut-ins and uptime-corrected rates
-- **Forecasting baseline**: DCA (exponential vs hyperbolic) + AIC selection
-- **Validation**: time-based backtest (last 90 flowing days held out)
-- **Emissions proxy**: operational CO₂ intensity proxy (Scope 1+2) with explicit assumptions
-- **Scenario**: data-derived rate cap (0.8×P95) to show trade-offs
-- **Dashboard**: Streamlit app to present results clearly
-- **Report**: Overleaf-ready LaTeX + readable Markdown
+- **Dashboard**: `app/streamlit_app.py`
+- **Preprocessing**: `scripts/preprocess_volve.py` → outputs `data/processed/volve_daily.csv`
+- **Notebooks (repro + figures)**:
+  - `notebooks/01_data_qc_eda.ipynb`
+  - `notebooks/02_dca_forecasting.ipynb`
+- **Report (readable)**: `reports/TECHNICAL_REPORT.md`
+- **Report (Overleaf)**: `reports/TECHNICAL_REPORT.tex`
 
-## Setup (recommended)
+## Example (what to look at)
+
+Open the dashboard, select a well (default **NO 15/9-F-14 H**), then:
+- **Downtime**: confirms shut-ins/operational stops (zeros are not reservoir decline).
+- **Effective oil rate** (`q_oil_eff`): uptime-corrected “flowing” rate for cleaner decline behavior.
+- **DCA fit + backtest**: exponential vs hyperbolic; time split; errors reported as **RMSE/MAE** in Sm³/d.
+- **Operational signals**: choke/pressure/injection explain regime shifts and why DCA can miss.
+- **Emissions + scenario**: intensity-based operational CO₂ proxy + data-derived cap (0.8×P95) to show trade-offs.
+
+## Preview figures (from the notebooks)
+
+**DCA backtest (example well):**
+![](reports/figures/dca_backtest_NO_15_9-F-14_H_q_oil_eff.png)
+
+**Operational signals (pressure/choke/injection):**
+![](reports/figures/ops_signals_NO_15_9-F-14_H.png)
+
+**Emissions proxy + rate-cap scenario:**
+![](reports/figures/emissions_NO_15_9-F-14_H_q_oil_eff.png)
+![](reports/figures/scenario_rate_cap_p95_NO_15_9-F-14_H_q_oil_eff.png)
+
+## Quickstart (run locally)
 
 ```bash
-cd "/Users/taief/Desktop/Norway Dam/equinor"
+git clone https://github.com/MaidenTaief/volve-reservoir-forecasting-operational-signals.git
+cd volve-reservoir-forecasting-operational-signals
+
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Data
+### Data (not included in the repo)
 
-Put the Volve Excel file here:
+Download the Excel from Kaggle:
+- https://www.kaggle.com/datasets/lamyalbert/volve-production-data
 
+Place it here:
 - `data/raw/Volve production data.xlsx`
 
-Then preprocess:
+Preprocess:
 
 ```bash
 python scripts/preprocess_volve.py --input data/raw --output data/processed/volve_daily.csv
 ```
 
-Note: this repo does **not** commit the raw dataset. Download it from Kaggle and place it under `data/raw/`:
-- `https://www.kaggle.com/datasets/lamyalbert/volve-production-data`
-
-Parquet is optional; if a Parquet engine isn’t available, the script can fall back to CSV.
-
-## Run the dashboard (localhost)
+Run the dashboard:
 
 ```bash
-.venv/bin/streamlit run app/streamlit_app.py
+streamlit run app/streamlit_app.py
 ```
 
 Open: `http://localhost:8501`
 
-## What to look at (one paragraph)
-In the Streamlit dashboard, pick a well (default **NO 15/9-F-14 H**) and start from downtime: spikes in downtime indicate shut-ins/operational stops, so zeros should not be treated as reservoir decline. Switch to the **effective (uptime-corrected)** oil rate to see decline behavior more clearly, then review the **DCA fit** and **DCA backtest** (train on history, test on last 90 flowing days) along with **RMSE/MAE** in Sm³/d. Finally, check **Operational signals** (pressure/choke/injection) to see regime changes that can explain DCA deviations, and the **emissions + rate-cap scenario** where a data-derived cap (\(0.8\times P95\)) illustrates trade-offs between peak constraints, cumulative production, and operational CO₂ proxy.
+## Notes
 
-## Reports
-
-- **Markdown report**: `reports/TECHNICAL_REPORT.md`
-- **Overleaf report**: `reports/TECHNICAL_REPORT.tex` (upload with `reports/figures/`)
-
-## Important note on emissions
-This repo uses an **intensity proxy** (not metered facility emissions). Assumptions and limitations are explicitly documented.
+- **Emissions**: this is an **intensity-based proxy** (not metered facility emissions). See the report for assumptions/limitations.
 

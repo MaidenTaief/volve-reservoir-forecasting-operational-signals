@@ -22,3 +22,7 @@ models/
 # Also ignore any raw Volve Excel file placed at repo root
 Volve production data.xlsx
 
+# Keep repo professional: don't track personal/job documents
+Equinor_Job.md
+Equinor_CV.*
+

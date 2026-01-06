@@ -10,7 +10,8 @@ import streamlit as st
 
 def find_project_root(start: Path | None = None) -> Path:
     p = (start or Path.cwd()).resolve()
-    markers = {"Equinor_Job.md", "requirements.txt", "src"}
+    # Keep this independent of any personal/job files (repo should stay clean for sharing).
+    markers = {"requirements.txt", "src", "app", "reports"}
     for cand in [p] + list(p.parents):
         hits = 0
         for m in markers:
